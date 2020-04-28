@@ -3,6 +3,7 @@ package transportsrv
 import (
 	"crypto/rsa"
 	"fmt"
+	"micaiahwallace/rewire/rwutils"
 	"net"
 
 	"micaiahwallace/rewire/rwcrypto"
@@ -50,10 +51,27 @@ type Server struct {
 
 // New creates a new transport server
 func New() *Server {
+
+	// Create new server
 	server := Server{
 		quit:   make(chan int),
 		agents: make(map[string]*AgentConn),
 	}
+
+	// Create necessary directory structure
+	errs := rwutils.MakePaths([]string{
+		"keys/agent/pending",
+		"keys/agent/accepted",
+		"keys/agent/blacklist",
+		"keys/client/pending",
+		"keys/client/accepted",
+		"keys/client/blacklist",
+	})
+	if len(errs) > 0 {
+		fmt.Println(errs)
+		panic("Unable to create directory structures.")
+	}
+
 	return &server
 }
 
@@ -114,6 +132,7 @@ func (server *Server) Stop() {
 // Handle agent authentication flow
 func (server *Server) handleAgent(conn net.Conn) {
 
+	// Get agent auth request
 	agentAuthReq := &AgentAuthRequest{}
 	struc.Unpack(conn, agentAuthReq)
 
@@ -121,7 +140,12 @@ func (server *Server) handleAgent(conn net.Conn) {
 	pubkey, err := rwcrypto.ParsePublicKey(agentAuthReq.PubKey)
 	if err != nil {
 		fmt.Println("Unable to parse public key", err)
-		conn.Close()
+
+		// send agent auth response
+		agentAuthResponse := &AgentAuthResp{
+			Authenticated: false,
+		}
+		struc.Pack(conn, agentAuthResponse)
 		return
 	}
 
@@ -129,14 +153,49 @@ func (server *Server) handleAgent(conn net.Conn) {
 	validSig := rwcrypto.ValidateSignature(pubkey, agentAuthReq.Sig, "authenticate")
 	if !validSig {
 		fmt.Println("Signature does not match public key")
-		conn.Close()
+
+		// send agent auth response
+		agentAuthResponse := &AgentAuthResp{
+			Authenticated: false,
+		}
+		struc.Pack(conn, agentAuthResponse)
 		return
 	}
 
-	// store reference to socket and wait for request
+	// create new agent connection
 	newAgent := NewAgentConn(pubkey, &conn)
-	server.agents[string(agentAuthReq.PubKey)] = newAgent
-	fmt.Println("New agent key verified")
+
+	// check if public key is already registered
+	regStatus := newAgent.Agent.KeyStatus()
+
+	if regStatus == AgentRegistered {
+		// store agent connection by public key
+		server.agents[newAgent.Agent.ID] = newAgent
+		fmt.Println("registered agent connected", newAgent.Agent.ID)
+
+		// send agent auth response
+		agentAuthResponse := &AgentAuthResp{
+			Authenticated: true,
+		}
+		struc.Pack(conn, agentAuthResponse)
+		return
+	}
+
+	if regStatus == AgentUnknown {
+		fmt.Println("agent not yet registered", newAgent.Agent.ID)
+
+		// Register agent as pending
+		if err = newAgent.Agent.SetKeyStatus(AgentPending); err != nil {
+			fmt.Println("unable to register pending agent", err, newAgent.Agent.ID)
+		}
+
+	}
+
+	// send agent auth response
+	agentAuthResponse := &AgentAuthResp{
+		Authenticated: false,
+	}
+	struc.Pack(conn, agentAuthResponse)
 }
 
 // Handle client authentication flow

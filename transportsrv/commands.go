@@ -31,7 +31,7 @@ type AgentAuthRequest struct {
 
 // AgentAuthResp is a response to AgentAuthRequest
 type AgentAuthResp struct {
-	Authenticated bool
+	Authenticated bool `struc:"bool"`
 }
 
 // ClientAuthRequest is a client authentication request to transport server
@@ -40,7 +40,7 @@ type ClientAuthRequest struct {
 
 // ClientAuthResp is an authentication response to the client
 type ClientAuthResp struct {
-	Authenticated bool
+	Authenticated bool `struc:"bool"`
 }
 
 // OpenTunnelRequest defines an inbound request to open a tunnel

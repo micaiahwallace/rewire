@@ -62,4 +62,9 @@ func (agent *Agent) Connect(host string, port int) {
 	}
 	struc.Pack(conn, authReq)
 
+	// Receive auth response
+	authresp := &transportsrv.AgentAuthResp{}
+	struc.Unpack(conn, authresp)
+	fmt.Println("authenticated:", authresp.Authenticated)
+
 }

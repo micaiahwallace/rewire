@@ -23,3 +23,20 @@ func FileExists(filename string) bool {
 	}
 	return !info.IsDir()
 }
+
+// MakePath creates directory path if any part doesn't exist
+func MakePath(path string) error {
+	return os.MkdirAll(path, 0755)
+}
+
+// MakePaths creates a list of directory paths with MakePath
+func MakePaths(paths []string) []error {
+	errs := make([]error, 0)
+	for _, path := range paths {
+		err := MakePath(path)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errs
+}
