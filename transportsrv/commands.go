@@ -45,8 +45,10 @@ type ClientAuthResp struct {
 
 // OpenTunnelRequest defines an inbound request to open a tunnel
 type OpenTunnelRequest struct {
-	HostSize int `struc:"int8,sizeof=Host"`
-	Host     string
-	Port     int
-	Agent    string
+	AgentSize int `struc:"int16,sizeof=Agent"`
+	Agent     string
+	HostSize  int `struc:"int8,sizeof=Host"`
+	Host      string
+	PortSize  int `struc:"int8,sizeof=Port"`
+	Port      string
 }

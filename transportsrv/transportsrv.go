@@ -2,6 +2,7 @@ package transportsrv
 
 import (
 	"crypto/rsa"
+	"errors"
 	"fmt"
 	"micaiahwallace/rewire/rwutils"
 	"net"
@@ -10,24 +11,6 @@ import (
 
 	"github.com/lunixbochs/struc"
 	"github.com/xtaci/smux"
-)
-
-var agent1pubkey, _ = rwcrypto.ParsePublicKey([]byte(`-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0XIUgGx8I/rcwAoekqc6
-/wNyG/bEKeT3lQiDv5WP+G8tfh2rcggQj9CVof37qJ2lytuh1rqpLrvWV2dQFacK
-Pnemvx0BVrKBY35O7QQCoV+j1BD/Hcf9AoijryUT9LnvZU92KPh1imT6QNGln2Uv
-Gr4RSzmoLDzKTcZIrcp/Vfx1uLPXj2dkDgZ46O/OIb5MLQdqMagxJJe9CeC1GW0o
-i9+T5ZnAgI073DEfNjfXUxGdhZ4AOFC5IXcf2fu4aDabS9jm3LLWEwOba+0Lf6Xh
-3CsQpw6zRjuYRB2ys7mZ2bmxOWWxK/zpCj4EaMDiAVar0oiB9Q43CoggTywUAdnE
-xQIDAQAB
------END PUBLIC KEY-----`))
-
-var (
-	registeredAgents []Agent = []Agent{
-		{
-			Pubkey: agent1pubkey,
-		},
-	}
 )
 
 // Server acts as conduit between remote agent and client
@@ -58,43 +41,55 @@ func New() *Server {
 		agents: make(map[string]*AgentConn),
 	}
 
-	// Create necessary directory structure
-	errs := rwutils.MakePaths([]string{
-		"keys/agent/pending",
-		"keys/agent/accepted",
-		"keys/agent/blacklist",
-		"keys/client/pending",
-		"keys/client/accepted",
-		"keys/client/blacklist",
-	})
-	if len(errs) > 0 {
-		fmt.Println(errs)
-		panic("Unable to create directory structures.")
+	// Initialize server dependencies
+	err := server.Setup()
+	if err != nil {
+		panic("Unable to setup server dependencies.")
 	}
 
 	return &server
 }
 
+// Setup required directories and objects
+func (server *Server) Setup() error {
+
+	// Create pki directory structure
+	errs := rwutils.MakePaths([]string{
+		AcceptedAgentKeyDir,
+		PendingAgentKeyDir,
+		BlacklistAgentKeyDir,
+		AcceptedClientKeyDir,
+		PendingClientKeyDir,
+		BlacklistClientKeyDir,
+	})
+
+	// Check for errors creating directories
+	if len(errs) > 0 {
+		return errors.New("Unable to provision pki dir tree")
+	}
+
+	// load server keypair
+	key, err := rwcrypto.LoadKeypair(ServerKeyName)
+	if err != nil {
+		return errors.New("Unable to load or generate server keys")
+	}
+	server.key = key
+
+	return nil
+}
+
 // Start the transport server listener
-func (server *Server) Start(port int) error {
+func (server *Server) Start(port string) error {
 	quitCheck := false
 
 	// create and start listener
-	addr := fmt.Sprintf(":%d", port)
+	addr := net.JoinHostPort("", port)
 	socket, err := net.Listen("tcp", addr)
 	if err != nil {
-		fmt.Println("Unable to bind socket")
 		return err
 	}
+	server.socket = socket
 	fmt.Println("Transport server running", addr)
-
-	// load server keypair
-	key, err := rwcrypto.LoadKeypair("server.key")
-	server.key = key
-	if err != nil {
-		fmt.Println("Unable to load or generate server keys")
-		return err
-	}
 
 	// loop and accept connections
 	for {
@@ -168,7 +163,10 @@ func (server *Server) handleAgent(conn net.Conn) {
 	// check if public key is already registered
 	regStatus := newAgent.Agent.KeyStatus()
 
-	if regStatus == AgentRegistered {
+	switch regStatus {
+
+	// Registered agent will stay connected
+	case AgentRegistered:
 		// store agent connection by public key
 		server.agents[newAgent.Agent.ID] = newAgent
 		fmt.Println("registered agent connected", newAgent.Agent.ID)
@@ -179,9 +177,10 @@ func (server *Server) handleAgent(conn net.Conn) {
 		}
 		struc.Pack(conn, agentAuthResponse)
 		return
-	}
 
-	if regStatus == AgentUnknown {
+	// Unknown agent will become pending and disconnect
+	case AgentUnknown:
+	case AgentPending:
 		fmt.Println("agent not yet registered", newAgent.Agent.ID)
 
 		// Register agent as pending
@@ -189,13 +188,20 @@ func (server *Server) handleAgent(conn net.Conn) {
 			fmt.Println("unable to register pending agent", err, newAgent.Agent.ID)
 		}
 
+	// Blacklit agent will disconnect
+	case AgentBlacklist:
+		fmt.Println("agent key blacklisted", newAgent.Agent.ID)
+
+	default:
+		fmt.Println("agent key error", newAgent.Agent.ID)
 	}
 
-	// send agent auth response
+	// Send not authenticated
 	agentAuthResponse := &AgentAuthResp{
 		Authenticated: false,
 	}
 	struc.Pack(conn, agentAuthResponse)
+
 }
 
 // Handle client authentication flow
@@ -227,4 +233,5 @@ func (server *Server) handleConnection(conn net.Conn) {
 	default:
 		fmt.Println("Unknown connection type")
 	}
+	fmt.Println("agents", server.agents)
 }

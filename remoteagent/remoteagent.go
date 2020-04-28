@@ -7,6 +7,8 @@ import (
 	"micaiahwallace/rewire/transportsrv"
 	"net"
 
+	"github.com/xtaci/smux"
+
 	"github.com/lunixbochs/struc"
 )
 
@@ -67,4 +69,28 @@ func (agent *Agent) Connect(host string, port int) {
 	struc.Unpack(conn, authresp)
 	fmt.Println("authenticated:", authresp.Authenticated)
 
+	if !authresp.Authenticated {
+		return
+	}
+
+	// Receive connection request
+	openReq := &transportsrv.OpenTunnelRequest{}
+	struc.Unpack(conn, openReq)
+	destAddr := net.JoinHostPort(openReq.Host, openReq.Port)
+	fmt.Println("open tunnel to", openReq.Host, openReq.Port)
+
+	// Filter out unauthorized requests
+
+	// Multiplex connection and send to the open request destination
+	muxer, err := smux.Server(conn, smux.DefaultConfig())
+	if err != nil {
+		panic("Unable to mux stream")
+	}
+	for {
+		inconn, err := muxer.AcceptStream()
+		if err != nil {
+			panic("Stream receive error")
+		}
+		// dial to destAddr
+	}
 }

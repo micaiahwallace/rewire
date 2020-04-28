@@ -6,5 +6,7 @@ import (
 
 func main() {
 	server := transportsrv.New()
-	server.Start(3000)
+	if err := server.Start("3000"); err != nil {
+		panic(err)
+	}
 }

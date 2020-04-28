@@ -241,3 +241,13 @@ func ExportKeyFile(key interface{}, filename string, private bool) error {
 
 	return nil
 }
+
+// GenerateKeyID hashes the public key as a uniuqe identifier
+func GenerateKeyID(key *rsa.PublicKey) (string, error) {
+	bytes, err := ExportKeyBytes(key, false)
+	if err != nil {
+		return "", err
+	}
+	hashed := sha256.Sum256(bytes)
+	return hex.EncodeToString(hashed[:]), nil
+}
