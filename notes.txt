@@ -1,0 +1,88 @@
+rewire - abstracts connection and messaging logic
+    InitClient - Connects to server and runs initiation logic
+    Connect - Connects to a transport server over tcp
+    SetupKeys - Performs logic to get client and server keys
+    Authenticate - Handles shared authentication to server
+    Request - Packs and sends a request to the server
+    RequestEncrypted - Encrypts a request with master key and sends it to the server
+
+rwcrypto - handles abstraction of crypto related tasks
+    GenerateKeyID - Creates a short unique id based on a public key
+    GenerateKey - Create a new rsa private key of given bit size
+    SignMessage - Signs a message packed message with a private key
+    EncryptMessage - Encrypts a message packed message with a public key
+    Keystore - holds a reference to the local managed key store
+        Contains - returns true if keystore contains specified key
+        SavePrivate - saves a private key to the keystore
+        SavePublic - saves a public key to the keystore
+        GetPrivate - retrieves a private key from the keystore
+        GetPublic - retrieves a public key from the keystore
+
+controlclient - handles controller logic for a control client
+    Run - Logic to connect to server and run cli command
+
+remoteagent - handles controller logic for remote agent client
+    Run - Logic to connect to server and poll for requests
+
+--- rewire lib ---
+
+def InitClient(host, port)
+    Connect(host, port)
+    SetupKeys()
+
+
+def Connect (host, port)
+    connection = TCPConnect(host, port)
+
+
+def SetupKeys ()
+
+    if !rwcrypto.Keystore.Contains(Constants.LocalKey)
+        newKey = rwcrypto.GenerateKey(2048)
+        rwcrypto.Keystore.SavePrivate(Constants.LocalKey, newKey)
+
+    if !rwcrypt.Keystore.Contains(Constants.ServerKey)
+        serverKey = Request(Requests.MasterKey())
+        rwcrypto.Keystore.SavePublic(Constants.ServerKey, newKey)
+
+
+def RequestEncrypted (request, keyid)
+
+    server_key = rwcrypto.Keystore.GetPublic(keyid)
+    Request(rwcrypto.EncryptMessage(request, server_key))
+
+
+def AuthenticateClient (client_type)
+
+    client_key = rwcrypto.Keystore.GetPrivate(Constants.LocalKey)
+    auth_sig = rwcrypto.CreateSignature(client_key, Constants.AuthSigString)
+    RequestEncrypted(Requests.ClientAuth{ pubkey: client_key.PublicKey, sig: auth_sig, type: client_type }, Constants.ServerKey)
+
+    if auth.Result is rewire.Constants.AuthKeyPending
+        exit("key pending")
+    if auth.Result is rewire.Contants.AuthKeyRejected
+        exit("key rejected")
+    if auth.Result is rewirew.Constants.AuthKeyError
+        exit("authentication failure unknown")
+
+--- control client lib ---
+
+def Run (command, args)
+
+    rewire.InitClient(host, port)
+    auth = rewire.AuthenticateClient(rewire.Constants.ControlClient)
+    
+    if command is CmdOpenTunnel
+        result = rewire.OpenTunnel(args.RemoteID, args.Host, args.Port)
+        exit(result)
+
+    if command is CmdListRemotes
+        remotes = rewire.ListRemotes()
+        exit(remotes)
+
+--- remote agent lib ---
+
+def Run ()
+
+    rewire.InitClient(host, port)
+    auth = rewire.AuthenticateClient(rewire.Constants.ClientRemote)

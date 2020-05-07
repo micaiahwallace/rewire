@@ -1,4 +1,4 @@
-package transportsrv
+package rewire
 
 // AgentKeyStatus indicates an agents registration on a transport server
 type AgentKeyStatus int
@@ -40,4 +40,40 @@ const (
 
 func (s AgentConnStatus) String() string {
 	return []string{"AgentDown", "AgentUp", "AgentAuth"}[s]
+}
+
+// ConnType defines agent or client
+type ConnType int
+
+const (
+	// BadConnType is an unknown or failed connection type
+	BadConnType = iota
+
+	// AgentConnType is an agent connection
+	AgentConnType
+
+	// ClientConnType is a client connetion
+	ClientConnType
+)
+
+func (s ConnType) String() string {
+	return []string{"AgentConnection", "ClientConnection"}[s]
+}
+
+// ReqType is a request type identifier
+type ReqType int
+
+const (
+	// InvalidReqType defines an unknown request type
+	InvalidReqType = iota
+
+	// AuthReqType is an authentication request
+	AuthReqType
+
+	// OpenTunnReqType is an open tunnel request
+	OpenTunnReqType
+)
+
+func (r ReqType) String() string {
+	return []string{"InvalidReqType", "AuthReqType", "OpenTunnelReqType"}[r]
 }

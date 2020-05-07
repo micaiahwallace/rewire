@@ -3,6 +3,7 @@ package remoteagent
 import (
 	"crypto/rsa"
 	"fmt"
+	"io"
 	"micaiahwallace/rewire/rwcrypto"
 	"micaiahwallace/rewire/transportsrv"
 	"net"
@@ -44,19 +45,23 @@ func (agent *Agent) Connect(host string, port int) {
 	}
 	agent.conn = &conn
 
-	// Start request
+	// Start request to server
 	newreq := &transportsrv.NewRequest{Type: transportsrv.AgentConnType}
 	struc.Pack(conn, newreq)
 
-	// Start authentication
+	// Create authentication signature
 	sigstr, err := rwcrypto.CreateSignature(agent.key, "authenticate")
 	if err != nil {
 		panic("Unable to create valud signature")
 	}
+
+	// Get pem format of key
 	pubpem, err := rwcrypto.ExportKeyBytes(&agent.key.PublicKey, false)
 	if err != nil {
 		panic("Unable to get public key pem bytes")
 	}
+
+	// Create auth request structure
 	authReq := &transportsrv.AgentAuthRequest{
 		PubKey:   pubpem,
 		Sig:      sigstr,
@@ -81,16 +86,47 @@ func (agent *Agent) Connect(host string, port int) {
 
 	// Filter out unauthorized requests
 
-	// Multiplex connection and send to the open request destination
-	muxer, err := smux.Server(conn, smux.DefaultConfig())
-	if err != nil {
-		panic("Unable to mux stream")
+	// Create forward session
+	if err := agent.ForwardConnection(destAddr); err != nil {
+		fmt.Println("Unable to create forward stream session", err)
 	}
+}
+
+// ForwardConnection muxes a tcp connection and joins inbound streams to the destination host via new outbound connection per stream
+func (agent *Agent) ForwardConnection(destAddr string) error {
+
+	// Create smux server to accept connections
+	muxer, err := smux.Server(*agent.conn, nil)
+	if err != nil {
+		fmt.Println("Unable to mux stream")
+		return err
+	}
+
+	// Loop accept new streams
 	for {
+
+		// Accept a new stream
 		inconn, err := muxer.AcceptStream()
 		if err != nil {
-			panic("Stream receive error")
+			fmt.Println("Cannot accept stream mux", err)
+			continue
 		}
-		// dial to destAddr
+
+		// Create the forward in a new go routine
+		go func(inconn *smux.Stream) {
+
+			// Dial to destination
+			outconn, err := net.Dial("tcp4", destAddr)
+			if err != nil {
+				fmt.Println("Cannot dial outbound connection")
+				return
+			}
+
+			// connect inbound and outbound connections
+			io.Copy(inconn, outconn)
+			io.Copy(outconn, inconn)
+		}(inconn)
 	}
+
+	return nil
 }

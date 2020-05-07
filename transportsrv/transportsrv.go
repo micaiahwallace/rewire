@@ -205,24 +205,68 @@ func (server *Server) handleAgent(conn net.Conn) {
 }
 
 // Handle client authentication flow
-func (server *Server) handleClient(conn net.Conn) *smux.Session {
+func (server *Server) handleClient(conn net.Conn) {
 
-	// multiplex tcp stream
-	session, err := smux.Server(conn, nil)
+	// Receive tunnel request
+
+	// Get agent connection and remove from queue
+
+	// Create mux client on agent connection
+
+	// Create mux server on client connection
+	clientMux, err := smux.Server(conn, nil)
 	if err != nil {
 		panic(err)
 	}
 
-	return session
+	// Accept mux server connections
+
+	// Open mux stream on agent client
+
+	// Forward accepted connection to new stream
+}
+
+// authenticate and authorize an inbound connection and send auth response
+func (server *Server) authenticateConnection(conn net.Conn) (ctype ConnType, autherr error) {
+
+	// Receive auth request
+	authReq := &AuthRequest{}
+	struc.Unpack(conn, authReq)
+
+	// decode the public key
+	publicKey, err := rwcrypto.ParsePublicKey(authReq.PubKey)
+	if err != nil {
+		ctype = BadConnType
+		autherr = errors.New("Unable to interpret authentication key")
+		return
+	}
+
+	// verify public key matches signature
+	validSig := rwcrypto.ValidateSignature(publicKey, authReq.Sig, "authenticate")
+	if !validSig {
+		ctype = BadConnType
+		autherr = errors.New("Signature does not match public key")
+	}
+
+	// set connection type
+	ctype = authReq.Type
+
+	return
 }
 
 // Logic for processing connections
 func (server *Server) handleConnection(conn net.Conn) {
 
-	// identify connection type, agent or client
-	inReq := &NewRequest{}
-	struc.Unpack(conn, inReq)
-	fmt.Println("Type:", inReq.Type)
+	// identify and authenticate connection
+	ctype, err := server.authenticateConnection(conn)
+	if err != nil {
+		authResponse := &AuthResp{
+			Authenticated: false,
+			Message:       err.Error(),
+		}
+		struc.Pack(conn, authResponse)
+		return
+	}
 
 	// Handle connection logic based on connection type
 	switch inReq.Type {
@@ -233,5 +277,4 @@ func (server *Server) handleConnection(conn net.Conn) {
 	default:
 		fmt.Println("Unknown connection type")
 	}
-	fmt.Println("agents", server.agents)
 }
