@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"micaiahwallace/rewire/rwcrypto"
-	"net"
 
 	"github.com/lunixbochs/struc"
 )
@@ -15,34 +14,24 @@ type Request struct {
 	Type ReqType
 }
 
-// EncryptRequest encrypts a request with a public key
-func EncryptRequest(req interface{}, key *rsa.PublicKey) (*EncryptedRequest, *EncryptedRequest, error) {
+// Request sends a request and recieves a result from the server
+func (client *Client) Request(req, resp interface{}) error {
 
-	// convert request to bytes
-	var buff bytes.Buffer
-	struc.Pack(&buff, req)
-	reqbytes := buff.Bytes()
-
-	// encrypt the bytes
-	encbytes, err := rwcrypto.EncryptBytes(reqbytes, key)
-	if err != nil {
-		return nil, nil, err
+	// pack request over tcp connection
+	if err := struc.Pack(*client.conn, req); err != nil {
+		return err
 	}
 
-	// create and return encrypted request structure
-	encreq := &EncryptedRequest{
-		Type:    req.(Request).Type,
-		Payload: encbytes,
+	// unpack response from tcp connection
+	if err := struc.Unpack(*client.conn, resp); err != nil {
+		return err
 	}
 
-	// create receive payload
-	encres := &EncryptedRequest{}
-
-	return encreq, encres, nil
+	return nil
 }
 
 // DecryptResponse decrypts a response using a private key
-func DecryptResponse(encres *EncryptedRequest, key *rsa.PrivateKey, res interface{}) error {
+func (client *Client) DecryptResponse(encres *EncryptedRequest, key *rsa.PrivateKey, res interface{}) error {
 
 	// decrypt the payload
 	resBytes, err := rwcrypto.DecryptBytes(encres.Payload, key)
@@ -51,24 +40,27 @@ func DecryptResponse(encres *EncryptedRequest, key *rsa.PrivateKey, res interfac
 	}
 
 	// unpack response from decrypted bytes
-	struc.Unpack(bytes.NewBuffer(resBytes), res)
+	if err := struc.Unpack(bytes.NewBuffer(resBytes), res); err != nil {
+		return err
+	}
 
-	return nil
-}
-
-// SendRequest sends a request to the server and load response into resp
-func SendRequest(conn *net.Conn, req interface{}, resp interface{}) error {
-
-	// send request to server
-	struc.Pack(*conn, req)
-
-	// receive response
-	struc.Unpack(*conn, resp)
 	return nil
 }
 
 // SendRequestEncrypted sends requests encrypted with server key, receives response encrypted with client key
-func SendRequestEncrypted(conn *net.Conn, req interface{}, resp interface{}, clientKey *rsa.PrivateKey, serverKey *rsa.PublicKey) error {
+func (client *Client) SendRequestEncrypted(req interface{}, resp interface{}) error {
+
+	// Get local key
+	localKey, err := rwcrypto.Keys.GetPrivate(Config.LocalKey)
+	if err != nil {
+		return err
+	}
+
+	// Get server key
+	serverKey, err := rwcrypto.Keys.GetPublic(Config.ServerKey)
+	if err != nil {
+		return err
+	}
 
 	// create encrypted payload wrapper
 	encreq, encres, err := EncryptRequest(req, serverKey)
@@ -77,22 +69,16 @@ func SendRequestEncrypted(conn *net.Conn, req interface{}, resp interface{}, cli
 	}
 
 	// send request and receive encrypted response
-	SendRequest(conn, encreq, encres)
+	if err := client.Request(encreq, encres); err != nil {
+		return err
+	}
 
 	// decrypt response into resp interface
-	err = DecryptResponse(encreq, clientKey, resp)
-	if err != nil {
+	if err := client.DecryptResponse(encres, localKey, resp); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// EncryptedRequest holds an encrypted request to the server
-type EncryptedRequest struct {
-	Type    ReqType `struc:"int8"`
-	Size    int     `struc:"int64,sizeof=Payload"`
-	Payload []byte
 }
 
 // OpenTunnelRequest defines an inbound request to open a tunnel

@@ -8,6 +8,7 @@ import (
 
 // AuthRequest is a request to authenticate a connection with the server
 type AuthRequest struct {
+	Type     ReqType
 	ConnType ConnType `struc:"int8"`
 	PubSize  int      `struc:"int16,sizeof=PubKey"`
 	PubKey   []byte   `struc:"[]int32"`
@@ -23,26 +24,27 @@ type AuthResp struct {
 }
 
 // CreateAuthRequest creates an auth request for a connection type and public key
-func CreateAuthRequest(t ConnType, key *rsa.PrivateKey) (*AuthRequest, error) {
+func CreateAuthRequest(connType ConnType, key *rsa.PrivateKey) (*AuthRequest, *AuthResp, error) {
 
 	// Create auth signature
-	sig, err := rwcrypto.CreateSignature(key, "authenticate")
+	sig, err := rwcrypto.CreateSignature(key, Config.AuthSigStr)
 	if err != nil {
-		return nil, errors.New("Cannot sign authentication message")
+		return nil, nil, errors.New("Cannot sign authentication message")
 	}
 
 	// Get key bytes
-	keybytes, err := rwcrypto.ExportKeyBytes(key.PublicKey, false)
+	keybytes, err := rwcrypto.GetKeyBytes(key.PublicKey, false)
 	if err != nil {
-		return nil, errors.New("Cannot convert key to bytes")
+		return nil, nil, errors.New("Cannot convert key to bytes")
 	}
 
 	// create auth request
 	authreq := &AuthRequest{
-		ConnType: t,
+		Type:     AuthReqType,
+		ConnType: connType,
 		PubKey:   keybytes,
 		Sig:      sig,
 	}
 
-	return authreq, nil
+	return authreq, &AuthResp{}, nil
 }

@@ -67,13 +67,25 @@ const (
 	// InvalidReqType defines an unknown request type
 	InvalidReqType = iota
 
+	// KeyReqType is a server key request
+	KeyReqType
+
+	// KeyRespType is a response to KeyReqType
+	KeyRespType
+
 	// AuthReqType is an authentication request
 	AuthReqType
 
+	// AuthRespType is a response to AuthReqType
+	AuthRespType
+
 	// OpenTunnReqType is an open tunnel request
 	OpenTunnReqType
+
+	// OpenTunnRespType is a response to OpenTunnReqType
+	OpenTunnRespType
 )
 
-func (r ReqType) String() string {
-	return []string{"InvalidReqType", "AuthReqType", "OpenTunnelReqType"}[r]
+func (s ReqType) String() string {
+	return []string{"InvalidReqType", "KeyReqType", "AuthReqType", "OpenTunnelReqType"}[s]
 }

@@ -1,10 +1,12 @@
 rewire - abstracts connection and messaging logic
     InitClient - Connects to server and runs initiation logic
-    Connect - Connects to a transport server over tcp
-    SetupKeys - Performs logic to get client and server keys
-    Authenticate - Handles shared authentication to server
-    Request - Packs and sends a request to the server
-    RequestEncrypted - Encrypts a request with master key and sends it to the server
+    client.Connect - Connects to a transport server over tcp
+    client.SetupKeys - Performs logic to get client and server keys
+    client.Authenticate - Handles shared authentication to server
+    client.Request - Packs and sends a request to the server
+    client.RequestEncrypted - Encrypts a request with master key and sends it to the server
+    InitServer - Creates a server and runs init logic
+    server.Start
 
 rwcrypto - handles abstraction of crypto related tasks
     GenerateKeyID - Creates a short unique id based on a public key
@@ -24,9 +26,56 @@ controlclient - handles controller logic for a control client
 remoteagent - handles controller logic for remote agent client
     Run - Logic to connect to server and poll for requests
 
---- rewire lib ---
+--- rewire server lib ---
 
-def InitClient(host, port)
+def InitServer (host, port)
+    InitLib()
+    SetupKeys()
+    Listen(host, port)
+
+
+def Listen (host, port)
+    listener = TCPListen(host, port)
+    for {
+        HandleClient(listener.Accept())
+    }
+
+def SetupKeys()
+    if !rwcrypto.Keys.Contains(Config.LocalKey)
+        newKey = rwcrypto.GenerateKey(2048)
+        rwcrypto.Keys.SavePrivate(Config.LocalKey, newKey)
+
+
+def ProcessRequest(req)
+    switch req.Type {
+        EncryptedRequestType:
+            decreq = DecryptRequest(req.Payload)
+            return ProcessRequest(decreq)
+        KeyRequestType:
+            keyreq = req.(KeyRequestType)
+            return HandleKeyRequest(keyreq)
+        AuthRequest:
+            authreq = req.(AuthRequestType)
+            return HandleAuthRequest(authreq)
+        OpenTunnReqType:
+            tunreq = req.(OpenTunnReqType)
+            return HandleOpenTunnRequest(tunnreq)
+        default:
+            return HandleUnknownRequest()
+    }
+
+def HandleClient(conn)
+    for {
+        req = Request{}
+        ReceiveRequest(conn, req)
+        ProcessRequest(req)
+    }
+    
+
+--- rewire client lib ---
+
+def InitClient (host, port)
+    InitLib()
     Connect(host, port)
     SetupKeys()
 
@@ -36,7 +85,6 @@ def Connect (host, port)
 
 
 def SetupKeys ()
-
     if !rwcrypto.Keystore.Contains(Constants.LocalKey)
         newKey = rwcrypto.GenerateKey(2048)
         rwcrypto.Keystore.SavePrivate(Constants.LocalKey, newKey)
@@ -58,11 +106,11 @@ def AuthenticateClient (client_type)
     auth_sig = rwcrypto.CreateSignature(client_key, Constants.AuthSigString)
     RequestEncrypted(Requests.ClientAuth{ pubkey: client_key.PublicKey, sig: auth_sig, type: client_type }, Constants.ServerKey)
 
-    if auth.Result is rewire.Constants.AuthKeyPending
+    if auth.Result is rewire.AuthKeyPending
         exit("key pending")
     if auth.Result is rewire.Contants.AuthKeyRejected
         exit("key rejected")
-    if auth.Result is rewirew.Constants.AuthKeyError
+    if auth.Result is rewirew.AuthKeyError
         exit("authentication failure unknown")
 
 --- control client lib ---
@@ -70,7 +118,7 @@ def AuthenticateClient (client_type)
 def Run (command, args)
 
     rewire.InitClient(host, port)
-    auth = rewire.AuthenticateClient(rewire.Constants.ControlClient)
+    auth = rewire.AuthenticateClient(rewire.ClientConnType)
     
     if command is CmdOpenTunnel
         result = rewire.OpenTunnel(args.RemoteID, args.Host, args.Port)
@@ -85,4 +133,4 @@ def Run (command, args)
 def Run ()
 
     rewire.InitClient(host, port)
-    auth = rewire.AuthenticateClient(rewire.Constants.ClientRemote)
+    auth = rewire.AuthenticateClient(rewire.AgentConnType)

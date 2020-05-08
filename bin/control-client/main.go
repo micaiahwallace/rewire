@@ -1,8 +1,12 @@
 package main
 
-import "micaiahwallace/rewire/ctrlclient"
+import (
+	"fmt"
+	"micaiahwallace/rewire/ctrlclient"
+)
 
 func main() {
-	client := ctrlclient.New()
-	client.Connect("localhost:3000")
+	if err := ctrlclient.Run("localhost", "3000"); err != nil {
+		fmt.Println("Control Client Error:", err.Error())
+	}
 }

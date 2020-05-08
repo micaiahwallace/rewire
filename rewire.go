@@ -1,25 +1,18 @@
 package rewire
 
-func InitClient() {
+import "micaiahwallace/rewire/rwcrypto"
 
-}
+// InitLib inits shared rewire logic
+func InitLib() {
 
-func Connect() {
+	// load config from cli or file
+	Config = &ConfigTemplate{
+		PKIRoot:    "./pki",
+		LocalKey:   "client.key",
+		ServerKey:  "server.key",
+		AuthSigStr: "authenticate",
+	}
 
-}
-
-func SetupKeys() {
-
-}
-
-func Authenticate() {
-
-}
-
-func Request() {
-
-}
-
-func RequestEncrypted() {
-
+	// setup crypto library
+	rwcrypto.Init(Config.PKIRoot)
 }
