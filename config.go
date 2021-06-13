@@ -12,6 +12,9 @@ type ConfigTemplate struct {
 	// path to server key file
 	ServerKey string
 
+	// Key length in bits when generating
+	KeyBitLength int
+
 	// string to sign when authenticating clients
 	AuthSigStr string
 }

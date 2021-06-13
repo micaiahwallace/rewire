@@ -7,7 +7,7 @@ import (
 
 // KeyRequest is a request structure for server key request
 type KeyRequest struct {
-	Type ReqType
+	Type ReqType `struc:"int8"`
 }
 
 // KeyResp is a response structure for a key request

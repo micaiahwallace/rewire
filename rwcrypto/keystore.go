@@ -4,8 +4,11 @@ import (
 	"crypto/rsa"
 	"errors"
 	"io/ioutil"
+	"log"
 	"micaiahwallace/rewire/rwutils"
+	"os"
 	"path"
+	"path/filepath"
 )
 
 // Keystore manages keys in a filesystem
@@ -20,7 +23,11 @@ type Keystore struct {
 
 // GetKeyPath concats the pkiroot to a keyfile path
 func (store *Keystore) GetKeyPath(kpath string) string {
-	return path.Join(store.PKIRoot, kpath)
+	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		return ""
+	}
+	return path.Join(dir, store.PKIRoot, kpath)
 }
 
 // Contains checks for a key at path
@@ -30,11 +37,13 @@ func (store *Keystore) Contains(kpath string) bool {
 
 // SavePrivate saves a private key to a path
 func (store *Keystore) SavePrivate(kpath string, key *rsa.PrivateKey) error {
+	log.Println("save priv", store.GetKeyPath(kpath))
 	return ExportKeyToFile(key, store.GetKeyPath(kpath), true)
 }
 
 // SavePublic saves a public key to a path
 func (store *Keystore) SavePublic(kpath string, key *rsa.PublicKey) error {
+	log.Println("save pub", store.GetKeyPath(kpath))
 	return ExportKeyToFile(key, store.GetKeyPath(kpath), false)
 }
 
@@ -43,7 +52,7 @@ func (store *Keystore) GetPrivate(kpath string) (*rsa.PrivateKey, error) {
 
 	// verify file existence
 	if exists := store.Contains(kpath); !exists {
-		return nil, errors.New("File does not exist")
+		return nil, errors.New("file does not exist")
 	}
 
 	// Read contents of file
@@ -61,7 +70,7 @@ func (store *Keystore) GetPublic(kpath string) (*rsa.PublicKey, error) {
 
 	// verify file existence
 	if exists := store.Contains(kpath); !exists {
-		return nil, errors.New("File does not exist")
+		return nil, errors.New("file does not exist")
 	}
 
 	// Read contents of file

@@ -1,280 +1,102 @@
 package transportsrv
 
 import (
-	"crypto/rsa"
 	"errors"
-	"fmt"
-	"micaiahwallace/rewire/rwutils"
+	"log"
+	"micaiahwallace/rewire"
 	"net"
-
-	"micaiahwallace/rewire/rwcrypto"
-
-	"github.com/lunixbochs/struc"
-	"github.com/xtaci/smux"
 )
 
-// Server acts as conduit between remote agent and client
+// Server is a rewire transport server
 type Server struct {
-
-	// underlying server tcp socket
-	socket net.Listener
-
-	// rsa keypair
-	key *rsa.PrivateKey
-
-	// active agent connections
-	agents map[string]*AgentConn
-
-	// active client connections
-	clients []string
-
-	// quit channel
-	quit chan int
+	Host     string
+	Port     string
+	listener *net.Listener
+	agents   map[string]*net.Conn
+	clients  map[string]*net.Conn
 }
 
-// New creates a new transport server
-func New() *Server {
+// NewServer creates and starts a new transport server
+func NewServer(host, port string) (*Server, error) {
 
-	// Create new server
-	server := Server{
-		quit:   make(chan int),
-		agents: make(map[string]*AgentConn),
+	// validate host param
+	// if host == "" {
+	// 	return nil, errors.New("host must be defined")
+	// }
+
+	// validate port param
+	if port == "" {
+		return nil, errors.New("port must be defined")
 	}
 
-	// Initialize server dependencies
-	err := server.Setup()
-	if err != nil {
-		panic("Unable to setup server dependencies.")
+	// init rewire lib
+	rewire.InitLib()
+
+	// create server
+	server := &Server{Host: host, Port: port}
+
+	// Setup keystore
+	if keyStoreErr := rewire.SetupServerKeys(); keyStoreErr != nil {
+		return nil, keyStoreErr
 	}
 
-	return &server
+	// Bind server to port
+	if listenErr := server.Listen(); listenErr != nil {
+		return nil, listenErr
+	}
+
+	return server, nil
 }
 
-// Setup required directories and objects
-func (server *Server) Setup() error {
-
-	// Create pki directory structure
-	errs := rwutils.MakePaths([]string{
-		AcceptedAgentKeyDir,
-		PendingAgentKeyDir,
-		BlacklistAgentKeyDir,
-		AcceptedClientKeyDir,
-		PendingClientKeyDir,
-		BlacklistClientKeyDir,
-	})
-
-	// Check for errors creating directories
-	if len(errs) > 0 {
-		return errors.New("Unable to provision pki dir tree")
-	}
-
-	// load server keypair
-	key, err := rwcrypto.LoadKeypair(ServerKeyName)
-	if err != nil {
-		return errors.New("Unable to load or generate server keys")
-	}
-	server.key = key
-
-	return nil
-}
-
-// Start the transport server listener
-func (server *Server) Start(port string) error {
-	quitCheck := false
+// Listen creates tcp listener
+func (server *Server) Listen() error {
 
 	// create and start listener
-	addr := net.JoinHostPort("", port)
-	socket, err := net.Listen("tcp", addr)
+	addr := net.JoinHostPort(server.Host, server.Port)
+	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
-	server.socket = socket
-	fmt.Println("Transport server running", addr)
+	server.listener = &listener
 
-	// loop and accept connections
+	// Loop accept connections
 	for {
-		select {
-
-		// stop the server channel check
-		case <-server.quit:
-			quitCheck = true
-
-		// accept a connection
-		default:
-			conn, err := socket.Accept()
-			if err != nil {
-				fmt.Println("Unable to accept connection")
-			} else {
-				go server.handleConnection(conn)
-			}
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Println("connection error:", err.Error())
+			continue
 		}
-
-		// quit the server
-		if quitCheck {
-			fmt.Println("Closing server")
-			break
-		}
+		go server.HandleClient(&conn)
 	}
+}
 
+// HandleClient process client connections
+func (server *Server) HandleClient(conn *net.Conn) {
+	for {
+
+		// Create a request struct to contain client request
+		req := &rewire.Request{}
+		if err := rewire.ReceiveServerRequest(conn, req); err != nil {
+			log.Println("Receive request error:", err.Error())
+			continue
+		}
+
+		// Perform logic based on request type
+		// res := server.GetRequestResponse(req)
+
+		// Send encrypted response back
+
+	}
+}
+
+// ProcessRequest process client requests
+func (server *Server) GetRequestResponse(req *rewire.Request) interface{} {
+	switch req.Type {
+	case rewire.EncryptedReqType:
+		// return server.ProcessRequest()
+	case rewire.KeyReqType:
+		// keyreq := req.(KeyRequest)
+		// HandleKeyRequest(keyreq)
+	}
 	return nil
-}
-
-// Stop the server listener
-func (server *Server) Stop() {
-	server.quit <- 0
-}
-
-// Handle agent authentication flow
-func (server *Server) handleAgent(conn net.Conn) {
-
-	// Get agent auth request
-	agentAuthReq := &AgentAuthRequest{}
-	struc.Unpack(conn, agentAuthReq)
-
-	// decode the public key
-	pubkey, err := rwcrypto.ParsePublicKey(agentAuthReq.PubKey)
-	if err != nil {
-		fmt.Println("Unable to parse public key", err)
-
-		// send agent auth response
-		agentAuthResponse := &AgentAuthResp{
-			Authenticated: false,
-		}
-		struc.Pack(conn, agentAuthResponse)
-		return
-	}
-
-	// verify public key matches signature
-	validSig := rwcrypto.ValidateSignature(pubkey, agentAuthReq.Sig, "authenticate")
-	if !validSig {
-		fmt.Println("Signature does not match public key")
-
-		// send agent auth response
-		agentAuthResponse := &AgentAuthResp{
-			Authenticated: false,
-		}
-		struc.Pack(conn, agentAuthResponse)
-		return
-	}
-
-	// create new agent connection
-	newAgent := NewAgentConn(pubkey, &conn)
-
-	// check if public key is already registered
-	regStatus := newAgent.Agent.KeyStatus()
-
-	switch regStatus {
-
-	// Registered agent will stay connected
-	case AgentRegistered:
-		// store agent connection by public key
-		server.agents[newAgent.Agent.ID] = newAgent
-		fmt.Println("registered agent connected", newAgent.Agent.ID)
-
-		// send agent auth response
-		agentAuthResponse := &AgentAuthResp{
-			Authenticated: true,
-		}
-		struc.Pack(conn, agentAuthResponse)
-		return
-
-	// Unknown agent will become pending and disconnect
-	case AgentUnknown:
-	case AgentPending:
-		fmt.Println("agent not yet registered", newAgent.Agent.ID)
-
-		// Register agent as pending
-		if err = newAgent.Agent.SetKeyStatus(AgentPending); err != nil {
-			fmt.Println("unable to register pending agent", err, newAgent.Agent.ID)
-		}
-
-	// Blacklit agent will disconnect
-	case AgentBlacklist:
-		fmt.Println("agent key blacklisted", newAgent.Agent.ID)
-
-	default:
-		fmt.Println("agent key error", newAgent.Agent.ID)
-	}
-
-	// Send not authenticated
-	agentAuthResponse := &AgentAuthResp{
-		Authenticated: false,
-	}
-	struc.Pack(conn, agentAuthResponse)
-
-}
-
-// Handle client authentication flow
-func (server *Server) handleClient(conn net.Conn) {
-
-	// Receive tunnel request
-
-	// Get agent connection and remove from queue
-
-	// Create mux client on agent connection
-
-	// Create mux server on client connection
-	clientMux, err := smux.Server(conn, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	// Accept mux server connections
-
-	// Open mux stream on agent client
-
-	// Forward accepted connection to new stream
-}
-
-// authenticate and authorize an inbound connection and send auth response
-func (server *Server) authenticateConnection(conn net.Conn) (ctype ConnType, autherr error) {
-
-	// Receive auth request
-	authReq := &AuthRequest{}
-	struc.Unpack(conn, authReq)
-
-	// decode the public key
-	publicKey, err := rwcrypto.ParsePublicKey(authReq.PubKey)
-	if err != nil {
-		ctype = BadConnType
-		autherr = errors.New("Unable to interpret authentication key")
-		return
-	}
-
-	// verify public key matches signature
-	validSig := rwcrypto.ValidateSignature(publicKey, authReq.Sig, "authenticate")
-	if !validSig {
-		ctype = BadConnType
-		autherr = errors.New("Signature does not match public key")
-	}
-
-	// set connection type
-	ctype = authReq.Type
-
-	return
-}
-
-// Logic for processing connections
-func (server *Server) handleConnection(conn net.Conn) {
-
-	// identify and authenticate connection
-	ctype, err := server.authenticateConnection(conn)
-	if err != nil {
-		authResponse := &AuthResp{
-			Authenticated: false,
-			Message:       err.Error(),
-		}
-		struc.Pack(conn, authResponse)
-		return
-	}
-
-	// Handle connection logic based on connection type
-	switch inReq.Type {
-	case AgentConnType:
-		server.handleAgent(conn)
-	case ClientConnType:
-		server.handleClient(conn)
-	default:
-		fmt.Println("Unknown connection type")
-	}
 }

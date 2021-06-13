@@ -3,10 +3,11 @@ rewire - abstracts connection and messaging logic
     client.Connect - Connects to a transport server over tcp
     client.SetupKeys - Performs logic to get client and server keys
     client.Authenticate - Handles shared authentication to server
-    client.Request - Packs and sends a request to the server
+    client.SendServerRequest - Packs and sends a request to the server
     client.RequestEncrypted - Encrypts a request with master key and sends it to the server
     InitServer - Creates a server and runs init logic
     server.Start
+    server.SetupKeys - Performs logic to get server key setup
 
 rwcrypto - handles abstraction of crypto related tasks
     GenerateKeyID - Creates a short unique id based on a public key
@@ -69,6 +70,8 @@ def HandleClient(conn)
         req = Request{}
         ReceiveRequest(conn, req)
         ProcessRequest(req)
+        res = EncryptResponse(res)
+        SendEncryptedResponse(res)
     }
     
 
@@ -134,3 +137,21 @@ def Run ()
 
     rewire.InitClient(host, port)
     auth = rewire.AuthenticateClient(rewire.AgentConnType)
+
+
+
+=======================
+LAST WORKED on
+=======================
+
+- I was moving code between transport server and rewire lib package to ensure 
+that rewire only holds necessary shared code. Keep in mind this will be
+compiled into clients so can't have any sensitive server code.
+
+- I added an encrypted field to the Request struct, so that it can replace
+the encryptedrequest struct to make parsing easier.
+
+- Need to look at the process request function to make it work properly,
+then write out the new transport server package with the shared lib.
+
+- Do the same with the clients to use the shared lib

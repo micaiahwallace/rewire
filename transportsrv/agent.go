@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"micaiahwallace/rewire"
 	"micaiahwallace/rewire/rwcrypto"
 	"micaiahwallace/rewire/rwutils"
 	"net"
@@ -32,7 +33,7 @@ type AgentConn struct {
 	Conn *net.Conn
 
 	// connection status
-	Status AgentConnStatus
+	Status rewire.AgentConnStatus
 
 	// connected agent tcp smux stream
 	Session *smux.Session
@@ -51,35 +52,35 @@ func NewAgentConn(key *rsa.PublicKey, socket *net.Conn) *AgentConn {
 	}
 	ac := AgentConn{
 		Agent:  &agent,
-		Status: AgentAuth,
+		Status: rewire.AgentAuth,
 		Conn:   socket,
 	}
 	return &ac
 }
 
 // KeyStatus returns the registration status of an agent key
-func (agent *Agent) KeyStatus() AgentKeyStatus {
+func (agent *Agent) KeyStatus() rewire.AgentKeyStatus {
 
 	// Check if key exists in accepted keys
 	if exists := rwutils.FileExists(KeyPath(AcceptedAgentKeyDir, agent.ID)); exists {
-		return AgentRegistered
+		return rewire.AgentRegistered
 	}
 
 	// Check if key exists in pending keys
 	if exists := rwutils.FileExists(KeyPath(PendingAgentKeyDir, agent.ID)); exists {
-		return AgentPending
+		return rewire.AgentPending
 	}
 
 	// Check if key exists in blacklist keys
 	if exists := rwutils.FileExists(KeyPath(BlacklistAgentKeyDir, agent.ID)); exists {
-		return AgentBlacklist
+		return rewire.AgentBlacklist
 	}
 
-	return AgentUnknown
+	return rewire.AgentUnknown
 }
 
 // SetKeyStatus sets the agent to a status
-func (agent *Agent) SetKeyStatus(status AgentKeyStatus) error {
+func (agent *Agent) SetKeyStatus(status rewire.AgentKeyStatus) error {
 
 	// get current status
 	currentStatus := agent.KeyStatus()
@@ -92,11 +93,11 @@ func (agent *Agent) SetKeyStatus(status AgentKeyStatus) error {
 	// get current path to key
 	cpath := ""
 	switch currentStatus {
-	case AgentRegistered:
+	case rewire.AgentRegistered:
 		cpath = KeyPath(AcceptedAgentKeyDir, agent.ID)
-	case AgentPending:
+	case rewire.AgentPending:
 		cpath = KeyPath(PendingAgentKeyDir, agent.ID)
-	case AgentBlacklist:
+	case rewire.AgentBlacklist:
 		cpath = KeyPath(BlacklistAgentKeyDir, agent.ID)
 	}
 
@@ -110,11 +111,11 @@ func (agent *Agent) SetKeyStatus(status AgentKeyStatus) error {
 	// create new status path
 	npath := ""
 	switch status {
-	case AgentRegistered:
+	case rewire.AgentRegistered:
 		npath = KeyPath(AcceptedAgentKeyDir, agent.ID)
-	case AgentPending:
+	case rewire.AgentPending:
 		npath = KeyPath(PendingAgentKeyDir, agent.ID)
-	case AgentBlacklist:
+	case rewire.AgentBlacklist:
 		npath = KeyPath(BlacklistAgentKeyDir, agent.ID)
 	}
 
@@ -124,7 +125,7 @@ func (agent *Agent) SetKeyStatus(status AgentKeyStatus) error {
 			return err
 		}
 	} else {
-		return errors.New("Unknown target key status specified")
+		return errors.New("unknown target key status specified")
 	}
 
 	return nil

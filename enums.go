@@ -67,6 +67,9 @@ const (
 	// InvalidReqType defines an unknown request type
 	InvalidReqType = iota
 
+	// EncryptedReqType is an encrypted payload
+	EncryptedReqType
+
 	// KeyReqType is a server key request
 	KeyReqType
 
@@ -87,5 +90,5 @@ const (
 )
 
 func (s ReqType) String() string {
-	return []string{"InvalidReqType", "KeyReqType", "AuthReqType", "OpenTunnelReqType"}[s]
+	return []string{"InvalidReqType", "KeyReqType", "KeyRespType", "AuthReqType", "AuthRespType", "OpenTunnelReqType", "OpenTunneRespType"}[s]
 }

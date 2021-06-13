@@ -18,7 +18,7 @@ func GetKeyBlockPEM(key interface{}, private bool) (*pem.Block, error) {
 		// Create from private key
 		privKey, ok := key.(*rsa.PrivateKey)
 		if !ok {
-			return nil, errors.New("Cannot assert private key")
+			return nil, errors.New("cannot assert private key")
 		}
 		pemBlock = &pem.Block{
 			Type:  "RSA PRIVATE KEY",
@@ -29,7 +29,7 @@ func GetKeyBlockPEM(key interface{}, private bool) (*pem.Block, error) {
 		// Create from public key
 		pubKey, ok := key.(*rsa.PublicKey)
 		if !ok {
-			return nil, errors.New("Cannot assert public key")
+			return nil, errors.New("cannot assert public key")
 		}
 		pemBlock = &pem.Block{
 			Type:  "RSA PUBLIC KEY",
@@ -58,14 +58,14 @@ func ParsePrivatePEM(pembytes []byte) (*rsa.PrivateKey, error) {
 	// decode pem string
 	privkeyBlock, _ := pem.Decode(pembytes)
 	if privkeyBlock == nil {
-		return nil, errors.New("Unable to decode private key pem")
+		return nil, errors.New("unable to decode private key pem")
 	}
 
 	// convert pem bytes into pkcs1 public key
 	privkeyBytes := privkeyBlock.Bytes
 	privkey, err := x509.ParsePKCS1PrivateKey(privkeyBytes)
 	if err != nil {
-		return nil, errors.New("Unable to parse PKCS1 private key")
+		return nil, errors.New("unable to parse PKCS1 private key")
 	}
 	return privkey, nil
 }
@@ -76,14 +76,14 @@ func ParsePublicPEM(pembytes []byte) (*rsa.PublicKey, error) {
 	// decode pem string
 	pubkeyBlock, _ := pem.Decode(pembytes)
 	if pubkeyBlock == nil {
-		return nil, errors.New("Unable to decode public key pem")
+		return nil, errors.New("unable to decode public key pem")
 	}
 
 	// convert pem bytes into pkcs1 public key
 	pubkeyBytes := pubkeyBlock.Bytes
 	pubkey, err := x509.ParsePKCS1PublicKey(pubkeyBytes)
 	if err != nil {
-		return nil, errors.New("Unable to parse PKCS1 public key")
+		return nil, errors.New("unable to parse PKCS1 public key")
 	}
 	return pubkey, nil
 }

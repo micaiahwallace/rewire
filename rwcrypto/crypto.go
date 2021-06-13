@@ -10,11 +10,13 @@ import (
 )
 
 // Keys is a package level keystore instance
-var Keys Keystore
+var Keys *Keystore
 
 // Init package level crypto dependencies
 func Init(pkipath string) {
-	Keys = Keystore{PKIRoot: pkipath}
+	if Keys == nil {
+		Keys = &Keystore{PKIRoot: pkipath}
+	}
 }
 
 // GenerateKeyID hashes the public key as a uniuqe identifier
@@ -55,7 +57,7 @@ func CreateSignature(key *rsa.PrivateKey, msg string) (string, error) {
 	// sign message
 	signedBytes, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, hashed[:])
 	if err != nil {
-		return "", errors.New("Unable to create signature")
+		return "", errors.New("unable to create signature")
 	}
 
 	// return bytes
@@ -77,10 +79,9 @@ func ValidateSignature(key *rsa.PublicKey, signatureString, msg string) bool {
 
 	// verify signature
 	err = rsa.VerifyPKCS1v15(key, crypto.SHA256, hashed[:], signature)
-	if err != nil {
-		return false
-	}
-	return true
+
+	// No error means that verification suceeded
+	return err == nil
 }
 
 // EncryptBytes encrypts bytes with a public key

@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"io"
+	"micaiahwallace/rewire"
 	"micaiahwallace/rewire/rwcrypto"
 	"micaiahwallace/rewire/transportsrv"
 	"net"
@@ -25,7 +26,7 @@ type Agent struct {
 
 // New creates a new agent
 func New() *Agent {
-	key, err := rwcrypto.LoadKeypair("agent.key")
+	key, err := rwcrypto.Keys.GetPrivate("agent.key")
 	if err != nil {
 		panic("Unable to create keypair")
 	}
@@ -46,7 +47,7 @@ func (agent *Agent) Connect(host string, port int) {
 	agent.conn = &conn
 
 	// Start request to server
-	newreq := &transportsrv.NewRequest{Type: transportsrv.AgentConnType}
+	newreq := &rewire.Request{Type: rewire.AgentConnType}
 	struc.Pack(conn, newreq)
 
 	// Create authentication signature
@@ -56,21 +57,21 @@ func (agent *Agent) Connect(host string, port int) {
 	}
 
 	// Get pem format of key
-	pubpem, err := rwcrypto.ExportKeyBytes(&agent.key.PublicKey, false)
+	pubpem, err := rwcrypto.GetKeyBytes(&agent.key.PublicKey, false)
 	if err != nil {
 		panic("Unable to get public key pem bytes")
 	}
 
 	// Create auth request structure
-	authReq := &transportsrv.AgentAuthRequest{
-		PubKey:   pubpem,
-		Sig:      sigstr,
-		AuthCode: "1234",
+	authReq := &rewire.AuthRequest{
+		PubKey: pubpem,
+		Sig:    sigstr,
+		// AuthCode: "1234",
 	}
 	struc.Pack(conn, authReq)
 
 	// Receive auth response
-	authresp := &transportsrv.AgentAuthResp{}
+	authresp := &rewire.AuthResp{}
 	struc.Unpack(conn, authresp)
 	fmt.Println("authenticated:", authresp.Authenticated)
 

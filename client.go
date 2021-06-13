@@ -14,20 +14,17 @@ type Client struct {
 	conn *net.Conn
 }
 
-// Config store configuration for rewire
-var Config *ConfigTemplate
-
 // InitClient creates and sets up a new client
 func InitClient(clientType ConnType, host, port string) (*Client, error) {
 
 	// validate host param
 	if host == "" {
-		return nil, errors.New("Host must be defined")
+		return nil, errors.New("host must be defined")
 	}
 
 	// validate port param
 	if port == "" {
-		return nil, errors.New("Port must be defined")
+		return nil, errors.New("port must be defined")
 	}
 
 	// Init rewire lib
@@ -37,15 +34,18 @@ func InitClient(clientType ConnType, host, port string) (*Client, error) {
 	client := Client{Host: host, Port: port, Type: clientType}
 
 	// Initiate server connection
-	err := client.Connect()
-	if err != nil {
-		return nil, err
+	if connErr := client.Connect(); connErr != nil {
+		return nil, connErr
 	}
 
 	// Setup keystore keys
-	err = client.SetupKeys()
-	if err != nil {
-		return nil, err
+	if keySetupErr := client.SetupKeys(); keySetupErr != nil {
+		return nil, keySetupErr
+	}
+
+	// Authenticate with the server
+	if authErr := client.Authenticate(); authErr != nil {
+		return nil, authErr
 	}
 
 	return &client, nil
@@ -73,7 +73,7 @@ func (client *Client) SetupKeys() error {
 	if !rwcrypto.Keys.Contains(Config.LocalKey) {
 
 		// generate new local key
-		newKey, err := rwcrypto.GenerateKey(2048)
+		newKey, err := rwcrypto.GenerateKey(Config.KeyBitLength)
 		if err != nil {
 			return err
 		}
@@ -87,7 +87,7 @@ func (client *Client) SetupKeys() error {
 
 		// create and send key request
 		serverKeyReq, serverKeyResp := ServerKeyRequest()
-		err := client.Request(serverKeyReq, &serverKeyResp)
+		err := client.SendServerRequest(serverKeyReq, &serverKeyResp)
 		if err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ func (client *Client) Authenticate() error {
 
 	// return error if not authenticated
 	if !authresp.Authenticated {
-		return errors.New("Client not authenticated")
+		return errors.New("client not authenticated")
 	}
 
 	return nil
