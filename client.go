@@ -2,6 +2,7 @@ package rewire
 
 import (
 	"errors"
+	"log"
 	"micaiahwallace/rewire/rwcrypto"
 	"net"
 )
@@ -37,18 +38,26 @@ func InitClient(clientType ConnType, host, port string) (*Client, error) {
 	if connErr := client.Connect(); connErr != nil {
 		return nil, connErr
 	}
+	log.Printf("ts up %s:%s\n", host, port)
 
 	// Setup keystore keys
 	if keySetupErr := client.SetupKeys(); keySetupErr != nil {
 		return nil, keySetupErr
 	}
+	log.Println("keystore loaded")
 
 	// Authenticate with the server
 	if authErr := client.Authenticate(); authErr != nil {
 		return nil, authErr
 	}
+	log.Println("client authenticated")
 
 	return &client, nil
+}
+
+// Get the underlying connection to use
+func (client *Client) GetConnection() *net.Conn {
+	return client.conn
 }
 
 // Connect to a transport server

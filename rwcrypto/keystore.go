@@ -4,7 +4,6 @@ import (
 	"crypto/rsa"
 	"errors"
 	"io/ioutil"
-	"log"
 	"micaiahwallace/rewire/rwutils"
 	"os"
 	"path"
@@ -37,13 +36,11 @@ func (store *Keystore) Contains(kpath string) bool {
 
 // SavePrivate saves a private key to a path
 func (store *Keystore) SavePrivate(kpath string, key *rsa.PrivateKey) error {
-	log.Println("save priv", store.GetKeyPath(kpath))
 	return ExportKeyToFile(key, store.GetKeyPath(kpath), true)
 }
 
 // SavePublic saves a public key to a path
 func (store *Keystore) SavePublic(kpath string, key *rsa.PublicKey) error {
-	log.Println("save pub", store.GetKeyPath(kpath))
 	return ExportKeyToFile(key, store.GetKeyPath(kpath), false)
 }
 

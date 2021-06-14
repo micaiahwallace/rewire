@@ -2,6 +2,7 @@ package transportsrv
 
 import (
 	"errors"
+	"io"
 	"log"
 	"micaiahwallace/rewire"
 	"net"
@@ -77,6 +78,13 @@ func (server *Server) HandleClient(conn *net.Conn) {
 		// Create a request struct to contain client request
 		req := &rewire.Request{}
 		if err := rewire.ReceiveServerRequest(conn, req); err != nil {
+
+			// Check for closed connections
+			if err == io.EOF {
+				log.Println("client connection closed.")
+				break
+			}
+
 			log.Println("Receive request error:", err.Error())
 			continue
 		}

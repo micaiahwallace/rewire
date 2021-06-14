@@ -3,6 +3,7 @@ package main
 import "micaiahwallace/rewire/remoteagent"
 
 func main() {
-	agent := remoteagent.New()
-	agent.Connect("localhost", 3000)
+	if err := remoteagent.Run("localhost", "3000"); err != nil {
+		panic(err)
+	}
 }
